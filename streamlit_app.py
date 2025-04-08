@@ -19,11 +19,16 @@ availability['date'] = pd.to_datetime(availability['date'], errors='coerce').dt.
 
 # List of holidays
 holidays = [
-    '2024-01-26', '2024-03-25', '2024-03-29', '2024-04-11', '2024-04-17', '2024-04-21', '2024-05-23',
-    '2024-06-17', '2024-07-17', '2024-08-15', '2024-08-26', '2024-09-16', '2024-10-02', '2024-10-12',
-    '2024-10-31', '2024-11-15', '2024-12-25', '2024-12-31', '2025-01-01', '2025-01-14', '2025-01-26',
-    '2025-03-14', '2025-03-30'
+    '2025-01-01', '2025-01-14', '2025-01-26',
+    '2025-03-01', '2025-03-17', '2025-03-30',
+    '2025-04-14', '2025-04-18', '2025-05-01',
+    '2025-05-12', '2025-06-06', '2025-08-15',
+    '2025-08-16', '2025-08-30', '2025-10-02',
+    '2025-10-07', '2025-10-11', '2025-10-20',
+    '2025-10-29', '2025-10-30', '2025-10-31',
+    '2025-11-02', '2025-12-25'
 ]
+
 holidays = pd.to_datetime(holidays).date
 
 # Map categorical variables to numeric values
@@ -34,17 +39,14 @@ result['villa_encoded'] = result['villa'].map(villa_mapping)
 result['city_encoded'] = result['city'].map(city_mapping)
 result['SEASONS'] = result['SEASONS'].astype('category').cat.codes
 
-# Add weekend and holiday features to the dataset
+# Add weekend and holiday features
 result['is_weekend'] = result['date'].apply(lambda x: x.weekday() >= 4)  # Saturday (5), Sunday (6)
 result['is_holiday'] = result['date'].apply(lambda x: x in holidays)
 
-# Train models with normalized features
+# Train models
 features = [
     'villa_encoded', 'city_encoded', 'SEASONS', 'Premiumness',
-    'total_capacity', 'baths_count', 'bedroom_count',
-    'Cafeology Paraphernalia', 'Bonfire', 'Golf Club Set',
-    'Private Pool', 'Swimming Pool(Private)', 'Jacuzzi',
-    'is_weekend', 'is_holiday'
+    'total_capacity', 'is_weekend', 'is_holiday'
 ]
 target = 'price'
 
@@ -89,14 +91,20 @@ def is_villa_available(villa, selected_date):
 # Streamlit App
 st.title("Villa Price Prediction")
 
-# User input
+# User Inputs
 selected_city = st.selectbox("Select a city", result['city'].unique())
 filtered_villas = result[result['city'] == selected_city]['villa'].unique()
 selected_villas = st.multiselect("Select villas", filtered_villas)
 multiplier = st.number_input("Enter Input for Multiplier", 0.00, None)
 
-if selected_villas:
-    date_range = pd.date_range(datetime.today(), '2025-01-01').date
+# New: Date Picker
+start_date, end_date = st.date_input(
+    "Select date range",
+    value=(datetime.today().date(), datetime(2025, 12, 31).date())
+)
+
+if selected_villas and start_date and end_date and start_date <= end_date:
+    date_range = pd.date_range(start=start_date, end=end_date)
 
     predictions = []
     for selected_date in date_range:
@@ -116,14 +124,6 @@ if selected_villas:
                         'SEASONS': result[result['villa'] == villa]['SEASONS'].iloc[0],
                         'Premiumness': result[result['villa'] == villa]['Premiumness'].iloc[0],
                         'total_capacity': result[result['villa'] == villa]['total_capacity'].iloc[0],
-                        'baths_count': result[result['villa'] == villa]['baths_count'].iloc[0],
-                        'bedroom_count': result[result['villa'] == villa]['bedroom_count'].iloc[0],
-                        'Cafeology Paraphernalia': result[result['villa'] == villa]['Cafeology Paraphernalia'].iloc[0],
-                        'Bonfire': result[result['villa'] == villa]['Bonfire'].iloc[0],
-                        'Golf Club Set': result[result['villa'] == villa]['Golf Club Set'].iloc[0],
-                        'Private Pool': result[result['villa'] == villa]['Private Pool'].iloc[0],
-                        'Swimming Pool(Private)': result[result['villa'] == villa]['Swimming Pool(Private)'].iloc[0],
-                        'Jacuzzi': result[result['villa'] == villa]['Jacuzzi'].iloc[0],
                         'is_weekend': selected_date.weekday() >= 4,
                         'is_holiday': selected_date in holidays
                     }
@@ -153,7 +153,7 @@ if selected_villas:
             })
 
     predictions_df = pd.DataFrame(predictions)
-    st.write(f"Price Predictions for {selected_city} from {datetime.today().strftime('%Y-%m-%d')} to 2024-12-31")
+    st.write(f"Price Predictions for {selected_city} from {start_date} to {end_date}")
     st.dataframe(predictions_df)
 
     buffer = io.BytesIO()
@@ -167,3 +167,5 @@ if selected_villas:
         file_name="villa_price_predictions.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+else:
+    st.warning("Please select valid villas and a proper date range.")
